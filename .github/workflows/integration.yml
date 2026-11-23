@@ -348,7 +348,7 @@ jobs:
           git config user.email "adamjensenbot@users.noreply.github.com"
 
       - name: Install Helm
-        uses: azure/setup-helm@v4
+        uses: azure/setup-helm@v5
         with:
           version: v3.8.1
 
