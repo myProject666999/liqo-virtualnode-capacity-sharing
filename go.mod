@@ -38,7 +38,7 @@ require (
 	golang.org/x/sys v0.47.0
 	golang.zx2c4.com/wireguard v0.0.0-20220904105730-b51010ba13f0
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20220504211119-3d4a969bb56b
-	gomodules.xyz/jsonpatch/v2 v2.4.0
+	gomodules.xyz/jsonpatch/v2 v2.5.0
 	google.golang.org/api v0.264.0
 	google.golang.org/grpc v1.83.2
 	google.golang.org/protobuf v1.36.11
