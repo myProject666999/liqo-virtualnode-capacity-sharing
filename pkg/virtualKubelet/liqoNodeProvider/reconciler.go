@@ -26,6 +26,7 @@ import (
 
 	liqov1beta1 "github.com/liqotech/liqo/apis/core/v1beta1"
 	offloadingv1beta1 "github.com/liqotech/liqo/apis/offloading/v1beta1"
+	"github.com/liqotech/liqo/pkg/utils"
 )
 
 func (p *LiqoNodeProvider) reconcileNodeFromNode(_ watch.Event) error {
@@ -133,16 +134,5 @@ func (p *LiqoNodeProvider) updateNode() error {
 
 // areResourcesReady returns true if both cpu and memory are more than zero.
 func areResourcesReady(allocatable v1.ResourceList) bool {
-	if allocatable == nil {
-		return false
-	}
-	cpu := allocatable.Cpu()
-	if cpu == nil || cpu.CmpInt64(0) <= 0 {
-		return false
-	}
-	memory := allocatable.Memory()
-	if memory == nil || memory.CmpInt64(0) <= 0 {
-		return false
-	}
-	return true
+	return utils.AreResourcesReady(allocatable)
 }

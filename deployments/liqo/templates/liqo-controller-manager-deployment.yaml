@@ -58,6 +58,12 @@ spec:
           {{- if .Values.authentication.defaultResourceSliceClass }}
           - --default-resource-slice-class={{ .Values.authentication.defaultResourceSliceClass }}
           {{- end }}
+          {{- if .Values.authentication.capacitySharingPolicies }}
+          - --capacity-sharing-policy={{ .Values.authentication.capacitySharingPolicies }}
+          {{- end }}
+          {{- if .Values.authentication.capacitySharingTolerations }}
+          - --capacity-sharing-tolerations={{ .Values.authentication.capacitySharingTolerations }}
+          {{- end }}
           - --offloading-enabled={{ .Values.offloading.enabled }}
           {{- if .Values.ipam.podCIDRs }}
           {{- range $cidr := .Values.ipam.podCIDRs }}

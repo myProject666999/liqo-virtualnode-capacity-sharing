@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	liqoconst "github.com/liqotech/liqo/pkg/consts"
@@ -301,4 +302,22 @@ var _ = Describe("NodeUtils", func() {
 
 	})
 
+})
+
+var _ = Describe("AreResourcesReady", func() {
+	DescribeTable("readiness of a resource list",
+		func(resources v1.ResourceList, expected bool) {
+			Expect(AreResourcesReady(resources)).To(Equal(expected))
+		},
+		Entry("nil list", nil, false),
+		Entry("empty list", v1.ResourceList{}, false),
+		Entry("only CPU", v1.ResourceList{v1.ResourceCPU: resource.MustParse("1")}, false),
+		Entry("only memory", v1.ResourceList{v1.ResourceMemory: resource.MustParse("1Gi")}, false),
+		Entry("zero CPU", v1.ResourceList{
+			v1.ResourceCPU: resource.MustParse("0"), v1.ResourceMemory: resource.MustParse("1Gi")}, false),
+		Entry("zero memory", v1.ResourceList{
+			v1.ResourceCPU: resource.MustParse("1"), v1.ResourceMemory: resource.MustParse("0")}, false),
+		Entry("positive CPU and memory", v1.ResourceList{
+			v1.ResourceCPU: resource.MustParse("500m"), v1.ResourceMemory: resource.MustParse("1Mi")}, true),
+	)
 })

@@ -69,6 +69,8 @@ type Options struct {
 	IngressClasses                   args.ClassNameList
 	LoadBalancerClasses              args.ClassNameList
 	DefaultNodeResources             args.ResourceMap
+	CapacitySharingPolicies          args.CapacitySharingPolicyList
+	CapacitySharingTolerations       args.TolerationList
 	GlobalLabels                     args.StringMap
 	GlobalAnnotations                args.StringMap
 

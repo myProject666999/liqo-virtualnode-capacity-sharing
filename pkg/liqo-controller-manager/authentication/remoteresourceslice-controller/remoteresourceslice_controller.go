@@ -101,6 +101,8 @@ type RemoteResourceSliceReconciler struct {
 // +kubebuilder:rbac:groups=authentication.liqo.io,resources=resourceslices;resourceslices/status,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=authentication.liqo.io,resources=tenants,verbs=get;list;watch
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;watch
+// +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
 // +kubebuilder:rbac:groups=storage,resources=storageclasses,verbs=get;list;watch
 
 // Reconcile replicated ResourceSlice resources.
@@ -282,22 +284,31 @@ func (r *RemoteResourceSliceReconciler) handleResourcesStatus(ctx context.Contex
 
 	switch tenant.Spec.TenantCondition {
 	case authv1beta1.TenantConditionActive:
-		// If the ResourceSlice is not of the default class, the resource status is leaved as it is and the update is
-		// demanded to external controllers/plugins.
-		if !isInResourceClasses(resourceSlice, r.reconciledClasses...) {
-			klog.V(6).Infof("ResourceSlice %q is not of the default class, the resource status is leaved as it is",
-				client.ObjectKeyFromObject(resourceSlice))
-			return nil
-		}
-
 		// If the built-in default ResourceSlice class has been administratively disabled on the provider,
-		// deny slices of the default (or empty) class instead of accepting them.
-		if !r.sliceStatusOptions.DefaultResourceSliceClassEnabled {
+		// deny slices of the default (or empty) class instead of accepting them. This is checked before any
+		// policy, so that disabling the default class cannot be bypassed by configuring a policy on it.
+		if isInResourceClasses(resourceSlice, authv1beta1.ResourceSliceClassDefault, authv1beta1.ResourceSliceClassUnknown) &&
+			!r.sliceStatusOptions.DefaultResourceSliceClassEnabled {
 			klog.V(4).Infof("ResourceSlice %q denied: the built-in default ResourceSlice class is administratively disabled",
 				client.ObjectKeyFromObject(resourceSlice))
 			denyResourcesWithReason(resourceSlice, r.eventRecorder,
 				"DefaultResourceSliceClassDisabled",
 				"the default ResourceSlice class has been administratively disabled on the provider")
+			return nil
+		}
+
+		// If the class enables a capacity sharing policy, grant the computed share of the provider capacity,
+		// reusing the legacy status fields and forging paths. The policy takes precedence over the built-in
+		// accept-as-requested behavior, hence it is honored even when the class is not one of the reconciled ones.
+		if policy, ok := r.capacitySharingPolicyFor(resourceSlice.Status.Class); ok {
+			return r.handleCapacitySharing(ctx, resourceSlice, policy)
+		}
+
+		// If the ResourceSlice is not of the default class, the resource status is leaved as it is and the update is
+		// demanded to external controllers/plugins.
+		if !isInResourceClasses(resourceSlice, r.reconciledClasses...) {
+			klog.V(6).Infof("ResourceSlice %q is not of the default class, the resource status is leaved as it is",
+				client.ObjectKeyFromObject(resourceSlice))
 			return nil
 		}
 
@@ -443,12 +454,20 @@ func denyAuthentication(resourceSlice *authv1beta1.ResourceSlice, er record.Even
 }
 
 func acceptResources(resourceSlice *authv1beta1.ResourceSlice, er record.EventRecorder) {
+	acceptResourcesWithReason(resourceSlice, er,
+		resourcesAcceptedReason, "ResourceSlice resources accepted")
+}
+
+// acceptResourcesWithReason accepts the resources of the ResourceSlice, reporting the given reason and message in
+// the Resources condition.
+func acceptResourcesWithReason(resourceSlice *authv1beta1.ResourceSlice, er record.EventRecorder,
+	reason, message string) {
 	switch authentication.EnsureCondition(
 		resourceSlice,
 		authv1beta1.ResourceSliceConditionTypeResources,
 		authv1beta1.ResourceSliceConditionAccepted,
-		"ResourceSliceResourcesAccepted",
-		"ResourceSlice resources accepted",
+		reason,
+		message,
 	) {
 	case controllerutil.OperationResultNone:
 		klog.V(4).Infof("ResourceSlice resources %q already accepted", resourceSlice.Name)

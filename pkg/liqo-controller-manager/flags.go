@@ -105,6 +105,13 @@ func InitFlags(flagset *pflag.FlagSet, opts *Options) {
 	flagset.Var(&opts.IngressClasses, "ingress-classes", "List of ingress classes offered by the cluster. Example: \"nginx;default,traefik\"")
 	flagset.Var(&opts.LoadBalancerClasses, "load-balancer-classes", "List of load balancer classes offered by the cluster. Example:\"metallb;default\"")
 	flagset.Var(&opts.DefaultNodeResources, "default-node-resources", "Default resources assigned to the Virtual Node Pod")
+	flagset.Var(&opts.CapacitySharingPolicies, "capacity-sharing-policy",
+		"Capacity sharing policies for ResourceSlice classes, in the form <class>=<ratio>[:<basis>] (repeatable). "+
+			"The ratio is an integer percentage in [1, 100] and the basis is either Available (default) or Total. "+
+			"Example: \"shared=50,dedicated=100:Total\"")
+	flagset.Var(&opts.CapacitySharingTolerations, "capacity-sharing-tolerations",
+		"Tolerations used to decide whether a NoSchedule taint on a provider node is tolerable during the capacity "+
+			"sharing computation, in the form key=value:Effect (repeatable). Example: \"dedicated=gpu:NoSchedule\"")
 	flagset.Var(&opts.GlobalLabels, "global-labels", "The set of labels that will be added to all resources created by Liqo controllers")
 	flagset.Var(&opts.GlobalAnnotations, "global-annotations", "The set of annotations that will be added to all resources created by Liqo controllers")
 

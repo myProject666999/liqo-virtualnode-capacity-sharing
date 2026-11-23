@@ -41,6 +41,10 @@ type SliceStatusOptions struct {
 	// DefaultResourceSliceClass is the class assigned to the ResourceSlices that do not request an
 	// explicit one. When empty, they keep being handled by the built-in default class.
 	DefaultResourceSliceClass authv1beta1.ResourceSliceClass
+	// CapacitySharingPolicies maps a ResourceSlice class to its capacity sharing policy. Classes without a
+	// policy keep the legacy behavior: the requested resources are accepted as they are, and the missing ones
+	// are filled in with DefaultResourceQuantity.
+	CapacitySharingPolicies map[authv1beta1.ResourceSliceClass]CapacitySharingPolicy
 }
 
 func getIngressClasses(opts *SliceStatusOptions) []liqov1beta1.IngressType {

@@ -73,8 +73,32 @@ func NewAuthOption(identityProvider identitymanager.IdentityProvider, namespaceM
 			DefaultResourceQuantity:          opts.DefaultNodeResources.ToResourceList(),
 			DefaultResourceSliceClassEnabled: opts.DefaultResourceSliceClassEnabled,
 			DefaultResourceSliceClass:        authv1beta1.ResourceSliceClass(opts.DefaultResourceSliceClass),
+			CapacitySharingPolicies:          capacitySharingPolicies(opts),
 		},
 	}
+}
+
+// capacitySharingPolicies converts the capacity sharing policies configured on the command line into the
+// map indexed by ResourceSlice class used by the controller. The configured tolerations are shared by all
+// the policies.
+func capacitySharingPolicies(opts *liqocontrollermanager.Options) map[authv1beta1.ResourceSliceClass]remoteresourceslicecontroller.CapacitySharingPolicy {
+	if len(opts.CapacitySharingPolicies.Policies) == 0 {
+		return nil
+	}
+
+	policies := make(
+		map[authv1beta1.ResourceSliceClass]remoteresourceslicecontroller.CapacitySharingPolicy,
+		len(opts.CapacitySharingPolicies.Policies))
+	for i := range opts.CapacitySharingPolicies.Policies {
+		policy := opts.CapacitySharingPolicies.Policies[i]
+		policies[authv1beta1.ResourceSliceClass(policy.Class)] = remoteresourceslicecontroller.CapacitySharingPolicy{
+			Ratio:       policy.Ratio,
+			Basis:       remoteresourceslicecontroller.RatioBasis(policy.Basis),
+			Tolerations: opts.CapacitySharingTolerations.Tolerations,
+			Publish:     remoteresourceslicecontroller.DefaultPublishThresholds(),
+		}
+	}
+	return policies
 }
 
 // SetupAuthenticationModule setup the authentication module and initializes its controllers .

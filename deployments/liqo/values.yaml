@@ -272,6 +272,16 @@ authentication:
   # explicit one. The resolved class is recorded once, hence changing this value only affects the
   # ResourceSlices created afterwards. Leave empty to keep handling them with the built-in default class.
   defaultResourceSliceClass: ""
+  # -- Capacity sharing policies for ResourceSlice classes, in the form "<class>=<ratio>[:<basis>]".
+  # The ratio is an integer percentage in [1, 100] and the basis is either "Available" (default) or "Total".
+  # When a class has a policy, the provider computes the granted resources as a share of the provider capacity
+  # (allocatable minus the non-Liqo pod requests), rather than accepting the requested amounts as they are.
+  # Classes without a policy keep the legacy accept-as-requested behavior.
+  capacitySharingPolicies: ""
+  # -- Tolerations used during the capacity sharing computation to decide whether a NoSchedule taint on a
+  # provider node is tolerable, in the form "key=value:Effect". Nodes with untolerated NoSchedule taints are
+  # excluded from the computation.
+  capacitySharingTolerations: ""
   # AWS-specific configuration for the local cluster and the Liqo user.
   # This user should be able (1) to create new IAM users, (2) to create new programmatic access
   # credentials, and (3) to describe EKS clusters.

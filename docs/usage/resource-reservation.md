@@ -275,6 +275,70 @@ Consistently, `spec.class` is immutable: attempting to change it on an existing 
 The class actually in use is the one reported in `status.class`, which the provider always fills in. Custom class controllers must select the `ResourceSlice`s they are responsible for through `status.class`, and not through `spec.class`, otherwise they will not see the requests remapped by the provider.
 ```
 
+(ResourceReservationCapacitySharing)=
+
+### Capacity sharing policies
+
+Instead of accepting the requested amounts as they are, a provider can configure **capacity sharing policies** that compute the granted resources as a share of the capacity it can actually schedule on.
+A policy is bound to a `ResourceSlice` class, so it is applied to the `ResourceSlice`s handled with that class (as reported in `status.class`).
+Classes without a policy keep the legacy accept-as-requested behavior.
+
+```{code-block} yaml
+:caption: "values.yaml (provider)"
+authentication:
+  capacitySharingPolicies: "shared=50,dedicated=100:Total"
+```
+
+The value is a comma-separated list of `<class>=<ratio>[:<basis>]` entries:
+
+* `<ratio>` is an integer percentage in `[1, 100]`; `0` and out-of-range values are rejected.
+* `<basis>` selects the quantity the ratio is applied to:
+  * `Available` (default): the ratio is applied to the capacity remaining after subtracting the requests of the pods already running on the provider (excluding the Liqo-managed ones) and the resources already granted to other consumers;
+  * `Total`: the ratio is applied to the total schedulable capacity, and the resources already granted to other consumers are subtracted afterwards.
+  The two bases are computed on the same data, so the outcome can be compared before choosing one.
+
+When a class has a policy, the provider:
+
+1. selects the eligible nodes, excluding the unschedulable (cordoned) ones, the ones that are not `Ready`, and the ones with a `NoSchedule` taint that is not tolerated through `authentication.capacitySharingTolerations` (only the `NoSchedule` effect is considered, so nodes with other taints are not discarded);
+2. computes the schedulable capacity of each node as its `allocatable` minus the requests of the non-Liqo pods scheduled on it, clamped to non-negative values, and then sums the results;
+3. subtracts the resources granted to other consumers, applies the ratio, and truncates the result to millicores for the CPU, to MiB for the memory-like resources, and to the integer unit for the pod count and the extended resources (e.g., GPUs), never advertising more than the capacity actually available;
+4. writes the outcome into `status.resources`, which the existing `Quota` and `VirtualNode` forging paths materialize on the provider and on the consumer, respectively.
+
+The granted amount is deducted exactly once: the Liqo-managed pods running on the provider are not subtracted from the schedulable capacity, since their consumption is accounted for by the granted resources themselves.
+
+```{admonition} Interaction with defaultNodeResources
+:class: note
+The fill-in amount configured through `offloading.defaultNodeResources` does not take part in the capacity sharing computation.
+When a class has a policy, the granted resources are computed from the provider capacity only; the defaults keep filling the missing keys on the legacy accept-as-requested path.
+This keeps the shared amount a pure consequence of the configured ratio, instead of depending on an install-time default.
+```
+
+```{admonition} Extended resources and fragmentation
+:class: note
+The aggregate amount of an extended resource (e.g., `nvidia.com/gpu`) does not prove that a single pod can consume all of it, since a pod cannot span multiple nodes. The `Resources` condition message reports, for every extended resource, the maximum amount a single node can offer and the aggregate, so that the fragmentation limit is explicit.
+```
+
+The `Resources` condition reports whether the granted capacity is usable:
+
+* `Accepted`, with reason `ResourceSliceResourcesAccepted`, when the capacity is ready and covers the current usage;
+* `Accepted`, with reason `ResourceSliceResourcesNotReady`, when the shared capacity has no positive CPU or memory (e.g., because the provider has no eligible node, or its capacity is exhausted by the running pods or by the resources already granted);
+* `Accepted`, with reason `ResourceSliceResourcesOvercommitted`, when the shared capacity is below what the consumer is currently using. Overcommit is only reported: existing pods are not evicted, and reclaiming capacity remains an administrative action (see [Suspend and reclaim a reservation](#suspend-and-reclaim-a-reservation)).
+
+```{warning}
+Reducing the shared capacity below the current usage does not evict the pods already running on the provider.
+The overcommit is reported in the `Resources` condition, but no enforcement is performed by the capacity sharing computation.
+```
+
+Capacity changes are subject to **publication thresholds**, so that frequent micro-fluctuations of the provider capacity do not trigger a cascade of `VirtualNode` updates.
+With the default thresholds, any change is published; a resource appearing from a zero baseline always counts as a change, so a sequence of sub-threshold changes is eventually published instead of being suppressed forever.
+The thresholds are compared against the last published capacity, not against the previous sample.
+
+```{admonition} What this feature does not do
+:class: note
+Capacity sharing performs the capacity arithmetic only, and reuses the existing types, forging paths and the default accept-as-requested path.
+It does not implement any authorization or approval workflow: deciding *whether* a consumer may peer, and with which class, remains an out-of-band decision, possibly implemented by a custom `ResourceSlice` class controller.
+```
+
 (ResourceReservationSuspendReclaim)=
 
 ## Suspend and reclaim a reservation
@@ -331,7 +395,7 @@ In other words, pods scheduled on the virtual node may still appear `Running` un
 
 A few aspects of the current design are worth keeping in mind when designing a reservation policy:
 
-* The default `ResourceSlice` class controller does not perform a **cluster-wide capacity check**: it accepts every request and may therefore grant more resources than the provider physically has, leaving the final arbitration to the standard Kubernetes scheduler on the provider. Cross-peering reservation requires a custom class controller; to make it enforceable, the provider can disable the built-in default class (`authentication.defaultResourceSliceClassEnabled: false`) so that consumers cannot fall back to the lenient default path.
+* The default `ResourceSlice` class controller does not perform a **cluster-wide capacity check**: it accepts every request and may therefore grant more resources than the provider physically has, leaving the final arbitration to the standard Kubernetes scheduler on the provider. Cross-peering reservation requires either a class with a [capacity sharing policy](#capacity-sharing-policies) or a custom class controller; to make it enforceable, the provider can disable the built-in default class (`authentication.defaultResourceSliceClassEnabled: false`) so that consumers cannot fall back to the lenient default path.
 * Reducing the granted resources on a slice does not evict pods that are already running; cordon and drain are the supported way to actively reclaim capacity.
 
 ## What Liqo does not

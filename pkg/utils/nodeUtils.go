@@ -80,6 +80,23 @@ func IsVirtualNode(node *corev1.Node) bool {
 	return found && nodeType == liqoconst.TypeNode
 }
 
+// AreResourcesReady returns true if the given resource list advertises a positive amount of both CPU and memory.
+// It is the readiness criterion shared by the consumer-side virtual node and the provider-side capacity sharing.
+func AreResourcesReady(resources corev1.ResourceList) bool {
+	if resources == nil {
+		return false
+	}
+	cpu := resources.Cpu()
+	if cpu == nil || cpu.CmpInt64(0) <= 0 {
+		return false
+	}
+	memory := resources.Memory()
+	if memory == nil || memory.CmpInt64(0) <= 0 {
+		return false
+	}
+	return true
+}
+
 // MergeNodeSelector merges two nodeSelectors.
 // Every MatchExpression of the first one must be merged with all the MatchExpressions of the second one:
 // n first MatchExpressions.
